@@ -1,6 +1,7 @@
 import os
-from sqlalchemy import Column, String, Integer, Date, Float, create_engine
+from sqlalchemy import Column, String, Integer, Date, Float, ForeignKey, create_engine
 from sqlalchemy.schema import UniqueConstraint, PrimaryKeyConstraint
+from sqlalchemy.orm import relationship
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.ext.declarative import declared_attr
@@ -64,7 +65,7 @@ class Generic():
 class Date(Generic, db.Model):
 
     date = Column(Date, unique=True)
-    curves = db.relationship('Curve', backref='tenor', lazy=True)
+    curves = relationship('Curve', backref='date', lazy=True)
 
     def __init__(self, date):
         self.date = date
@@ -73,7 +74,7 @@ class Date(Generic, db.Model):
 class Currency(Generic, db.Model):
 
     ccy = Column(String, unique=True)
-    curves = db.relationship('Curve', backref='tenor', lazy=True)
+    curves = relationship('Curve', backref='currency', lazy=True)
 
     def __init__(self, ccy):
         self.ccy = ccy
@@ -82,7 +83,7 @@ class Currency(Generic, db.Model):
 class Tenor(Generic, db.Model):
 
     tenor = Column(String, unique=True)
-    spreads = db.relationship('Spread', backref='tenor', lazy=True)
+    spreads = relationship('Spread', backref='tenor', lazy=True)
 
     def __init__(self, tenor):
         self.tenor = tenor
@@ -90,10 +91,10 @@ class Tenor(Generic, db.Model):
 
 class Curve(Generic, db.Model):
 
-    date_id = db.Column(db.Integer, db.ForeignKey('Date.id'), nullable=False)
-    ccy_id = db.Column(db.Integer, db.ForeignKey(
+    date_id = Column(Integer, ForeignKey('Date.id'), nullable=False)
+    ccy_id = Column(Integer, ForeignKey(
         'Currency.id'), nullable=False)
-    spreads = db.relationship('Spread', backref='curve', lazy=True)
+    spreads = relationship('Spread', backref='curve', lazy=True)
 
     __table_args__ = (UniqueConstraint(
         'date_id', 'ccy_id', name='_curve_uc'), PrimaryKeyConstraint("id", name="_pk_id"),)
@@ -105,11 +106,9 @@ class Curve(Generic, db.Model):
 
 class Spread(Generic, db.Model):
 
-    tenor_id = db.Column(db.Integer, db.ForeignKey('Tenor.id'), nullable=False)
-    curve_id = db.Column(db.Integer, db.ForeignKey('Curve.id'), nullable=False)
+    tenor_id = Column(Integer, ForeignKey('Tenor.id'), nullable=False)
+    curve_id = Column(Integer, ForeignKey('Curve.id'), nullable=False)
     spread = Column(Float)
-
-    curves = db.relationship('Curve', backref='tenor', lazy=True)
 
     def __init__(self, tenor_id, curve_id,  spread):
         self.tenor_id = tenor_id
