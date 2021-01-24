@@ -32,7 +32,7 @@ def get_markit_yiled(yyyymmdd, ccy):
 
 
 if __name__ == "__main__":
-    yyyymmdd = '20201231'
+    yyyymmdd = '20201230'
     ccy = 'USD'
 
     date, yield_dict = get_markit_yiled(yyyymmdd, ccy)

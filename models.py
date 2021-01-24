@@ -30,7 +30,8 @@ def setup_db(app, database_path=db_path):
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     db.app = app
     db.init_app(app)
-    Migrate(app, db)
+    db.create_all()
+    #Migrate(app, db)
 
 
 '''
@@ -65,7 +66,8 @@ class Generic():
 class Date(Generic, db.Model):
 
     date = Column(Date, unique=True)
-    curves = relationship('Curve', backref='date', lazy=True)
+    curves = relationship('Curve', backref='date',
+                          cascade="all, delete-orphan", lazy=True)
 
     def __init__(self, date):
         self.date = date
@@ -74,7 +76,8 @@ class Date(Generic, db.Model):
 class Currency(Generic, db.Model):
 
     ccy = Column(String, unique=True)
-    curves = relationship('Curve', backref='currency', lazy=True)
+    curves = relationship('Curve', backref='currency',
+                          cascade="all, delete-orphan", lazy=True)
 
     def __init__(self, ccy):
         self.ccy = ccy
@@ -83,7 +86,8 @@ class Currency(Generic, db.Model):
 class Tenor(Generic, db.Model):
 
     tenor = Column(String, unique=True)
-    spreads = relationship('Spread', backref='tenor', lazy=True)
+    spreads = relationship('Spread', backref='tenor',
+                           cascade="all, delete-orphan", lazy=True)
 
     def __init__(self, tenor):
         self.tenor = tenor
@@ -94,7 +98,8 @@ class Curve(Generic, db.Model):
     date_id = Column(Integer, ForeignKey('Date.id'), nullable=False)
     ccy_id = Column(Integer, ForeignKey(
         'Currency.id'), nullable=False)
-    spreads = relationship('Spread', backref='curve', lazy=True)
+    spreads = relationship('Spread', backref='curve',
+                           cascade="all, delete-orphan", lazy=True)
 
     __table_args__ = (UniqueConstraint(
         'date_id', 'ccy_id', name='_curve_uc'), PrimaryKeyConstraint("id", name="_pk_id"),)
