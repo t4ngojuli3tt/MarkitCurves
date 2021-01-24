@@ -34,17 +34,29 @@ def commit_ccy():
 def commit_curve(yyyymmdd, CCY):
     ccy = Currency.query.filter_by(ccy=CCY).one_or_none()
 
-    date_datetime = datetime.date(
-        int(yyyymmdd[:4]), int(yyyymmdd[4:6]), int(yyyymmdd[6:8]))
+    date_datetime = to_datetime(yyyymmdd)
     date = Date.query.filter_by(date=date_datetime).one_or_none()
 
     _, yield_dict = get_markit_yiled(yyyymmdd, CCY)
-    curve = Curve(date.id, ccy.id)
+
+    curve = Curve(date_id=date.id, ccy_id=ccy.id)
     curve.insert()
 
     tenors = Tenor.query.all()
     for tenor in tenors:
         Spread(tenor.id, curve.id, yield_dict[tenor.tenor]).insert()
+
+
+# deleteing tenor, ccy and date will clear db by cascade deletation
+def delete_data():
+    [tenor.delete() for tenor in Tenor.query.all()]
+    [ccy.delete() for ccy in Currency.query.all()]
+    [date.delete() for date in Date.query.all()]
+
+
+def to_datetime(yyyymmdd):
+    return datetime.date(
+        int(yyyymmdd[:4]), int(yyyymmdd[4:6]), int(yyyymmdd[6:8]))
 
 
 def create_app(test_config=None):
@@ -108,8 +120,7 @@ def create_app(test_config=None):
         if ccy is None:
             abort(404, f"There is no currency {currency}")
 
-        date_datetime = datetime.date(
-            int(yyyymmdd[:4]), int(yyyymmdd[4:6]), int(yyyymmdd[6:8]))
+        date_datetime = to_datetime(yyyymmdd)
         date = Date.query.filter_by(date=date_datetime).one_or_none()
 
         if date is None:
@@ -141,14 +152,45 @@ def create_app(test_config=None):
             'spread': spread.spread,
         }), 200
 
+    @app.route('/curves', methods=['PATCH'])
+    def patch_curve():
+        body = request.get_json()
+        yyyymmdd = body.get('date')
+        currency = body.get('ccy')
+        override = body.get('override')
+
+        ccy = Currency.query.filter_by(ccy=currency).one_or_none()
+        date = Date.query.filter_by(date=to_datetime(yyyymmdd)).one_or_none()
+
+        try:
+            curve = Curve.query.filter_by(date_id=date.id, ccy_id=ccy.id).one()
+        except:
+            abort(
+                404, f"There is no curve with for currency {currency} at date {to_datetime(yyyymmdd)}")
+        try:
+            for tenor_key in override.keys():
+                tenor = Tenor.query.filter_by(tenor=tenor_key).one()
+                spread = Spread.query.filter_by(
+                    curve_id=curve.id, tenor_id=tenor.id).one()
+                spread.spread = override[tenor_key]
+                spread.update()
+        except:
+            abort(422, "Incorrect override")
+
+        return jsonify({
+            'success': True,
+            'status_code': 200,
+            'curve': {'date_id': curve.date_id, 'ccy_id': curve.ccy_id},
+            'spread': 0.002020,
+        }), 200
+
     @app.route('/curves', methods=['DELETE'])
     def delete_curve():
         body = request.get_json()
         yyyymmdd = body.get('date')
         currency = body.get('ccy')
 
-        date_datetime = datetime.date(
-            int(yyyymmdd[:4]), int(yyyymmdd[4:6]), int(yyyymmdd[6:8]))
+        date_datetime = to_datetime(yyyymmdd)
         date = Date.query.filter_by(date=date_datetime).one_or_none()
 
         ccy = Currency.query.filter_by(ccy=currency).one_or_none()
