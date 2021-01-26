@@ -14,7 +14,8 @@ db_password = 'postgres'  # os.environ.get('DB_PASS')
 db_host = "localhost:5432"
 db_name = "markit"
 
-db_path = f'postgresql://{db_user}:{db_password}@{db_host}/{db_name}'
+db_path = 'postgres://ediregubsklsqr:88c50aa21da9162dcc5dfb77cbe509417fefe03be80ec3d1092c790ceb078b40@ec2-52-72-190-41.compute-1.amazonaws.com:5432/d2a2hlcatqmdtk'
+# f'postgresql://{db_user}:{db_password}@{db_host}/{db_name}'
 
 db = SQLAlchemy()
 
