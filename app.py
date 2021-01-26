@@ -7,6 +7,7 @@ import datetime
 
 from models import setup_db, Date, Tenor, Currency, Curve, Spread
 from markit import get_markit_yiled
+from auth import AuthError, requires_auth
 
 '''
 Function to populate Tenor table, to be use only for newly created db. 
@@ -66,6 +67,7 @@ def create_app(test_config=None):
     CORS(app)
 
     @app.route('/currencies')
+    @requires_auth(permission='get:currency')
     def get_currencies():
         selection = Currency.query.all()
 
@@ -81,6 +83,7 @@ def create_app(test_config=None):
         })
 
     @app.route('/dates')
+    @requires_auth(permission='get:date')
     def get_dates():
         selection = Date.query.all()
 
@@ -95,23 +98,55 @@ def create_app(test_config=None):
             'dates': dates,
         }), 200
 
-    @app.route('/currencies/<int:ccy_id>')
-    def get_currency(ccy_id):
-        selection = Currency.query.all()
+    @app.route('/curves/id', methods=['POST'])
+    @requires_auth(permission='get:curve')
+    def post_request_curve_id():
+        body = request.get_json()
+        yyyymmdd = body.get('date')
+        currency = body.get('ccy')
 
-        if len(selection) == 0:
-            abort(404)
+        ccy = Currency.query.filter_by(ccy=currency).one_or_none()
+        if ccy is None:
+            abort(404, f"There is no currency {currency}")
 
-        currencies = {currency.id: currency.ccy for currency in selection}
+        date_datetime = to_datetime(yyyymmdd)
+        date = Date.query.filter_by(date=date_datetime).one_or_none()
+
+        if date is None:
+            abort(404, f"There is no date {yyyymmdd}")
+
+        curve = Curve.query.filter_by(date_id=date.id, ccy_id=ccy.id).one()
 
         return jsonify({
             'success': True,
             'status_code': 200,
-            'currencies': currencies,
+            'curve_id': curve.id
+        }), 200
+
+    @app.route('/curves/<int:curve_id>')
+    @requires_auth(permission='get:curve')
+    def get_curve_by_id(curve_id):
+
+        curve = Curve.query.filter_by(id=curve_id).one_or_none()
+        if curve is None:
+            abort(404, f"There is no curve with id:{curve_id}")
+
+        spreads = {}
+        tenors = Tenor.query.all()
+        for tenor in tenors:
+            spread = Spread.query.filter_by(
+                tenor_id=tenor.id, curve_id=curve.id).one()
+            spreads[tenor.tenor] = spread.spread
+
+        return jsonify({
+            'success': True,
+            'status_code': 200,
+            'curve': {"curve_id": curve.id, "spreads": spreads}
         }), 200
 
     @app.route('/curves', methods=['POST'])
-    def post_curve():
+    @requires_auth(permission='post:curve')
+    def post_new_curve():
         body = request.get_json()
         yyyymmdd = body.get('date')
         currency = body.get('ccy')
@@ -152,21 +187,17 @@ def create_app(test_config=None):
             'spread': spread.spread,
         }), 200
 
-    @app.route('/curves', methods=['PATCH'])
-    def patch_curve():
+    @app.route('/curves/<int:curve_id>', methods=['PATCH'])
+    @requires_auth(permission='patch:curve')
+    def patch_curve(curve_id):
         body = request.get_json()
-        yyyymmdd = body.get('date')
-        currency = body.get('ccy')
         override = body.get('override')
 
-        ccy = Currency.query.filter_by(ccy=currency).one_or_none()
-        date = Date.query.filter_by(date=to_datetime(yyyymmdd)).one_or_none()
-
         try:
-            curve = Curve.query.filter_by(date_id=date.id, ccy_id=ccy.id).one()
+            curve = Curve.query.filter_by(id=curve_id).one()
         except:
             abort(
-                404, f"There is no curve with for currency {currency} at date {to_datetime(yyyymmdd)}")
+                404, f"There is no curve with id:{curve_id}")
         try:
             for tenor_key in override.keys():
                 tenor = Tenor.query.filter_by(tenor=tenor_key).one()
@@ -184,31 +215,22 @@ def create_app(test_config=None):
             'spread': 0.002020,
         }), 200
 
-    @app.route('/curves', methods=['DELETE'])
-    def delete_curve():
+    @app.route('/curves/<int:curve_id>', methods=['DELETE'])
+    @requires_auth(permission='delete:curve')
+    def delete_curve(curve_id):
         body = request.get_json()
-        yyyymmdd = body.get('date')
-        currency = body.get('ccy')
-
-        date_datetime = to_datetime(yyyymmdd)
-        date = Date.query.filter_by(date=date_datetime).one_or_none()
-
-        ccy = Currency.query.filter_by(ccy=currency).one_or_none()
-
         try:
-            curve = Curve.query.filter_by(date_id=date.id, ccy_id=ccy.id).one()
+            curve = Curve.query.filter_by(id=curve_id).one()
         except:
             abort(
-                404, f"There is no curve with for currency {currency} at date {date_datetime}")
-        try:
-            curve.delete()
-        except:
-            abort(422, "Unable to delete!")
+                404, f"There is no curve with id:{curve_id}")
+
+        curve.delete()
 
         return jsonify({
             'success': True,
             'status_code': 200,
-            'curve': {'date_id': date.id, 'ccy_id': ccy.id},
+            'deleted_curve_id': curve_id,
         }), 200
 
     @app.errorhandler(422)
@@ -234,6 +256,14 @@ def create_app(test_config=None):
             "error": 404,
             "message": error.description
         }), 404
+
+    @app.errorhandler(AuthError)
+    def already_exist(error):
+        return jsonify({
+            "success": False,
+            "error": error.status_code,
+            "message": error.error['description']
+        }), error.status_code
 
     return app
 
