@@ -126,7 +126,6 @@ def create_app(test_config=None):
     @app.route('/curves/<int:curve_id>')
     @requires_auth(permission='get:curve')
     def get_curve_by_id(curve_id):
-
         curve = Curve.query.filter_by(id=curve_id).one_or_none()
         if curve is None:
             abort(404, f"There is no curve with id:{curve_id}")
@@ -198,12 +197,16 @@ def create_app(test_config=None):
         except:
             abort(
                 404, f"There is no curve with id:{curve_id}")
+
+        spreads = {}
         try:
+
             for tenor_key in override.keys():
                 tenor = Tenor.query.filter_by(tenor=tenor_key).one()
                 spread = Spread.query.filter_by(
                     curve_id=curve.id, tenor_id=tenor.id).one()
                 spread.spread = override[tenor_key]
+                spreads[tenor.tenor] = spread.spread
                 spread.update()
         except:
             abort(422, "Incorrect override")
@@ -212,7 +215,7 @@ def create_app(test_config=None):
             'success': True,
             'status_code': 200,
             'curve': {'date_id': curve.date_id, 'ccy_id': curve.ccy_id},
-            'spread': 0.002020,
+            'spreads': spreads,
         }), 200
 
     @app.route('/curves/<int:curve_id>', methods=['DELETE'])

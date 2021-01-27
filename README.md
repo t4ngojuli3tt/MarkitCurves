@@ -1,3 +1,24 @@
+# Markit API
+## About
+This API provide more convenient access to Market Interest Rate Curve available at
+https://www.markit.com/news/InterestRates_ccy_yyyymmdd.zip
+details descripiton of the curve can be found here:
+https://www.cdsmodel.com/cdsmodel/assets/cds-model/docs/Interest%20Rate%20Curve%20Specification%20-%20All%20Currencies%20(Updated%20October%202013).pdf 
+it is running at markit-api.herokuapp.com
+It offer two type of access
+- client - can only get data
+- quant - apart from getting data can also modify, add and delete curves
+
+#### Dependencies
+This project key dependecies are flask, sqlalchemy and postgresql, all dependecies are in requirements.txt.
+
+#### Running localy
+To run this localy configure enviroment variables, particularly for postgres db cilent
+```bash
+pip install -r requirements.txt
+python app.py
+```
+## API
 All endpoint returns contains keys success and status_code with boolean and int values respectively  (e.g.   {"status_code": 200, "success": true, ...} )
 
 There are 3 error handlers (404, 409, 422) plus authorization error handlers, all returns json with three key value paris and error code
@@ -11,97 +32,88 @@ e.g jsonify({
 GET '/dates'
 - Fetches a dictionary of categories in which the keys are the ids and the value is the corresponding string of the category
 - Request Arguments: None
-- Returns: An object with a single key, categories, that contains a object of id: date (as datetime) key:value pairs. 
+- Returns an object that apart from stadard keys contains a single key, categories, that contains a object of id: date (as datetime) key:value pairs. 
     "dates": {
             "4": "Thu, 31 Dec 2020 00:00:00 GMT",
             "5": "Wed, 30 Dec 2020 00:00:00 GMT"
         }
+- required permission: get:dates
 - Errors:
-    - 404 -  if there is no category
+    - 404 -  if there is no dates
 
 
 GET '/currencies'
-- Fetches a list dictionaries of questios in which the keys are names of questions class atributes and the value is the corresponding value of the atribute for a gives question. Fetches also all categories in the same format as GET '/categoires'/
+- Fetches a dic of currencies with id currency name key-value pairs.
+- Request Arguments:  None
+- Returns an object that apart from stadard keys contains a key:
+    - currencies
+- required permission: get:currency
+- Errors:
+    - 404 - if there is no currencies
+
+
+POST '/curves/id'
+- Fetches curve id for reuqsted date and currency
+- Request Arguments: 
+    json object with:
+    - date - date str in format yyyymmdd
+    - ccy - currecny str in format XXX e.g. USD
+- Returns an object that apart from stadard keys contains a key:
+    - curve_id - id (int) of a curve for given currency date pair 
+- required permission: get:curves
+- Errors:
+    - 404 - if there is no currency or date
+    
+
+ GET '/curves/<int:curve_id>'
+- Fetches curve spreads for curve with curve_id 
 - Request Arguments:  
-    -category(int) - optional, None by default -  coresponding to id of category for which we want to get questions
-    -page(int) - opitional, 1 by default - page argument for pagination
-- Returns: An object with a keys:
-    - categories - same as for GET '/categoires'/
-    - current_category - name of category for which questions were fatched
-        e.g. "current_category": "Science" 
-    - questions - list of dictionaries containig question details
-        e.g. "questions": [
-        {
-        "answer": "Maya Angelou", 
-        "category": 4, 
-        "difficulty": 2, 
-        "id": 5, 
-        "question": "Whose autobiography is entitled 'I Know Why the Caged Bird Sings'?"
-        }, ...]
-    - total_questions - number of all questions
-        e.g. "total_questions": 19
+    - curve_id - int 
+- Returns an object that apart from stadard keys contains a key:
+    - curve - dict with two keys curve_id and spreads, value for curve_id is just int curve id and for spread is a dict with tenor sprad key-value pairs.
+- required permission: get:curves
 - Errors:
-    - 404 - if the idea of category is incorrect or there is no question in selected category 
+    - 404 - if there is no curve with this id
 
 
-DELETE '/questions/<int:question_id>'
-- Delete question from the database
-- Request Arguments:  question_id (int) - id of the question to be deleted 
-- Returns: An object with a keys:
-    - deleted - id of question that was deleted 
-        e.g. "deleted": 1
-    - questions and total_questions - same as in GET '/questions'
+POST '/curves'
+- Post new curve to the database
+- Request Arguments: 
+    json object with:
+    - date - date str in format yyyymmdd
+    - ccy - currecny str in format XXX e.g. USD
+- Returns an object that apart from stadard keys contains a keys:
+    - curve - dict with date_id and ccy_id keys, with corresponding values
+    - spread - 5y spread of the new curve 
+- required permission: post:curves
 - Errors:
-    - 404 - if question to be deleted wasn't found in the database
+    - 422 - unable to query 5y spread for posted curve.
+    - 409 - curve already exist
 
 
-POST '/questions'
-- Post new question to the database
-- Request Arguments:  json object with question, answer, category and difficulty fildes
-- Returns: An object with a keys:
-    - question - value of this key is a string containg posted question
-        e.g. "question": "How are you?"
-- Errors:
-    - 422 - if body does not contains requiered data
-    - 409 - if question is already in the database
-
-
-POST '/questions/search'
-- Fetches a list dictionaries of questions same as GET '\questions', but only with questions which contains search term
+PATCH '/curves/<int:curve_id>'
+- Override existing curve in db
 - Request Arguments:  
-    -searchTerm(string)  -  
-- Returns: Similar object to the one return by GET '\questions' by this one does not contain categories key, and the list of question is restricted to the ones which match search term. 
-
-
-GET '/categories/<int:category_id>/questions'
-- Fetches a list dictionaries of questios for a given category.
-- Request Arguments:  
-    -category(int) - optional, None by default -  coresponding to id of category for which we want to get questions
-    -page(int) - opitional, 1 by default - page argument for pagination
-- Returns: An object with a keys:
-    - questions - same as GET '/questions'
+    - curve_id
+- Returns an object that apart from stadard keys contains a keys:
+    - curve - dict with date_id and ccy_id keys, with corresponding values
+    - spreads - dict with tenor spreads key value pairs of override tenors
+- required permission: pacht:curves
 - Errors:
-    - 404 - if category_id does not corespond to any category id in the database 
+    - 422 - incorrect override, body of the request is incorrect
+    - 404 - if there is no curve with this id
 
-POST '/play'
-- Fetches a random question from a given category.
+
+
+DELETE '/curves/<int:curve_id>'
+- Delete existing curve in db
 - Request Arguments:  
-    - quiz_category (dict) - optional, None by default -  dictionary with two keys id and type
-    -previous_questions(list of int) - by default empyt list - list of question to be exlcude from this request
-- Returns: An object with a keys:
-    - question - dictionary with question, answer, category and difficulty keys
-        e.g. "question":
-        {
-        "answer": "Maya Angelou", 
-        "category": 4, 
-        "difficulty": 2, 
-        "id": 5, 
-        "question": "Whose autobiography is entitled 'I Know Why the Caged Bird Sings'?"
-        }
+    - curve_id
+- Returns an object that apart from stadard keys contains a key:
+    - deleted_curve_id - int 
+- required permission: delete:curves
 - Errors:
-    - 404 - if category_id does not corespond to any category id in the database 
-```
-
+   - 404 - if there is no curve with this id
 
 ## Testing
 To run the tests,
